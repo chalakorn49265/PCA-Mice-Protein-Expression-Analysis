@@ -1,0 +1,61 @@
+import numpy as np
+import pandas as pd
+from scipy.io import arff
+from sklearn.preprocessing import StandardScaler
+
+def load_data(file_path):
+    # Load the dataset from the ARFF file
+    data = arff.loadarff(file_path)
+    df = pd.DataFrame(data[0])
+    return df
+
+def clean_data(df):
+    # Drop non-numeric columns
+    numeric_data = df.drop(columns=['MouseID', 'Genotype', 'Treatment', 'Behavior'])
+    
+    # Standardize the numeric data
+    scaler = StandardScaler()
+    standardized_data = scaler.fit_transform(numeric_data)
+    standardized_df = pd.DataFrame(standardized_data, columns=numeric_data.columns)
+
+    # Define threshold for NaN and window size for rolling average
+    nan_threshold = 0.2
+    window_size = 3
+    columns_to_drop = []
+
+    for column in standardized_df.columns:
+        # Calculate the proportion of NaN values
+        nan_proportion = standardized_df[column].isna().mean()
+
+        if nan_proportion <= nan_threshold:
+            # Fill NaNs with a moving average, then forward fill, then backward fill
+            standardized_df[column] = standardized_df[column].fillna(
+                standardized_df[column].rolling(window=window_size, min_periods=1).mean()
+            ).ffill().bfill()
+        else:
+            # Mark columns with too many NaNs for dropping
+            columns_to_drop.append(column)
+
+    # Drop columns with more than the threshold of NaN values
+    standardized_df.drop(columns=columns_to_drop, inplace=True)
+
+    # Output the number of features and NaN values
+    num_features_left = standardized_df.shape[1]
+    total_nan = standardized_df.isna().sum().sum()
+    print(f"Number of features left: {num_features_left}")
+    print(f"Total number of NaN values in the DataFrame: {total_nan}")
+
+    return standardized_df
+
+def main():
+    file_path = 'data/mice_protein.arff'
+    # Load the data
+    df = load_data(file_path)
+    print(f"Original data shape: {df.shape}")
+    
+    # Clean the data
+    cleaned_df = clean_data(df)
+    print(f"Cleaned data shape: {cleaned_df.shape}")
+
+if __name__ == "__main__":
+    main()
